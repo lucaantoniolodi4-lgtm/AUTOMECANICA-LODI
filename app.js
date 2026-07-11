@@ -97,6 +97,21 @@ function bindEvents() {
   statusFilter.addEventListener("change", render);
   clientSearchInput.addEventListener("input", renderClientSearch);
 
+  clientSearchBody.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.getAttribute("data-action");
+    const id = target.getAttribute("data-id");
+    if (action !== "delete-client" || !id) return;
+
+    try {
+      await deleteClientById(id);
+      renderClientSearch();
+    } catch (error) {
+      onError("eliminar cliente", error);
+    }
+  });
+
   jobsBody.addEventListener("click", async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -277,6 +292,12 @@ async function upsertClientFromJob(job) {
 
   if (!history.some((entry) => entry.date === job.date && entry.task === job.task)) {
     history.push({ date: job.date, task: job.task });
+  }
+
+  async function deleteClientById(id) {
+    const { error } = await supabaseClient.from("clients").delete().eq("id", id);
+    if (error) throw error;
+    state.clients = state.clients.filter((client) => client.id !== id);
   }
 
   const client = {
@@ -563,7 +584,7 @@ function renderClientSearch() {
     });
 
   if (clients.length === 0) {
-    clientSearchBody.innerHTML = `<tr><td colspan="7">No hay clientes para mostrar.</td></tr>`;
+    clientSearchBody.innerHTML = `<tr><td colspan="8">No hay clientes para mostrar.</td></tr>`;
     return;
   }
 
@@ -577,6 +598,7 @@ function renderClientSearch() {
       <td>${escapeHtml(client.clientDni || "-")}</td>
       <td>${formatDate(client.firstSeenAt || "")}</td>
       <td>${renderClientJobs(client.jobs || [])}</td>
+      <td><button class="icon-btn" data-action="delete-client" data-id="${escapeHtml(client.id)}">Eliminar</button></td>
     `;
     clientSearchBody.appendChild(row);
   }
