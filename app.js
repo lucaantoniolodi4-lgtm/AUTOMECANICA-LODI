@@ -627,12 +627,13 @@ function renderWeeklyRecords() {
     const weekJobs = grouped.get(weekKey).sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const total = weekJobs.reduce((acc, job) => acc + Number(job.estimatedCost || 0), 0);
     const [year, week] = weekKey.split("-W");
+    const range = weekRangeFromKey(weekKey);
 
     const details = document.createElement("details");
     details.className = "week-block";
     details.open = true;
     details.innerHTML = `
-      <summary>Semana ${week} (${year}) - ${weekJobs.length} ingreso(s) - ${formatCurrency(total)}</summary>
+      <summary>Semana ${week} (${year}) - ${formatDate(range.start)} al ${formatDate(range.end)} - ${weekJobs.length} ingreso(s) - ${formatCurrency(total)}</summary>
       <div class="table-wrap">
         <table>
           <thead>
@@ -768,6 +769,32 @@ function weekKeyFromDate(dateStr) {
   return `${d.getFullYear()}-W${String(getWeekNumber(d)).padStart(2, "0")}`;
 }
 
+function weekRangeFromKey(weekKey) {
+  const parts = String(weekKey).split("-W");
+  const year = Number(parts[0]);
+  const week = Number(parts[1]);
+  if (!year || !week) {
+    const now = new Date();
+    return { start: toISODate(now), end: toISODate(now) };
+  }
+
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setUTCDate(jan4.getUTCDate() - (jan4Day - 1));
+
+  const start = new Date(mondayWeek1);
+  start.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
+
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+
+  return {
+    start: toISODateUTC(start),
+    end: toISODateUTC(end)
+  };
+}
+
 function getWeekNumber(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -780,6 +807,13 @@ function toISODate(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function toISODateUTC(date) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
