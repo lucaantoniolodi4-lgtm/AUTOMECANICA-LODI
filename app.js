@@ -6,6 +6,7 @@ const AUTH_PASS = "familialodi";
 const AUTH_KEY = "automecanica_lodi_auth";
 const DELETED_PREFIX = "__DELETED__ ";
 const WEEKLY_RESET_PREFIX = "__WRESET__ ";
+const MONTHLY_RESET_PREFIX = "__MRESET__ ";
 
 const statusOrder = ["Pendiente", "En progreso", "Finalizado", "Entregado"];
 
@@ -104,17 +105,17 @@ function bindEvents() {
   clientSearchInput.addEventListener("input", renderClientSearch);
   resetWeeklyBillingBtn.addEventListener("click", async () => {
     try {
-      const ok = window.confirm("¿Seguro que querés resetear a $0 toda la facturación de la semana actual?");
+      const ok = window.confirm("¿Seguro que querés resetear a $0 toda la facturación del mes actual?");
       if (!ok) return;
-      const updated = await resetCurrentWeekBilling();
+      const updated = await resetCurrentMonthBilling();
       if (updated === 0) {
-        window.alert("No hay items para resetear en la semana actual.");
+        window.alert("No hay items para resetear en el mes actual.");
       } else {
-        window.alert(`Semana actual reseteada: ${updated} item(s).`);
+        window.alert(`Mes actual reseteado: ${updated} item(s).`);
       }
       render();
     } catch (error) {
-      onError("resetear facturación semanal", error);
+      onError("resetear facturación mensual", error);
     }
   });
   if (resetSelectedWeekBtn && resetWeekSelect) {
@@ -322,6 +323,25 @@ async function deleteJobById(id) {
 
 async function resetCurrentWeekBilling() {
   return resetWeekBillingByKey(currentWeekKey());
+}
+
+async function resetCurrentMonthBilling() {
+  const currentMonth = toCurrentMonthKey();
+  const monthJobs = state.jobs
+    .filter((job) => String(job.date || "").startsWith(currentMonth))
+    .filter((job) => isResettableForMonthlyReset(job));
+  const ids = monthJobs.map((job) => job.id);
+  if (ids.length === 0) return 0;
+
+  const updates = monthJobs.map((job) => updateJobFields(job.id, { task: addMonthlyResetMarker(job.task) }));
+  await Promise.all(updates);
+
+  const idSet = new Set(ids);
+  state.jobs = state.jobs.map((job) => {
+    if (!idSet.has(job.id)) return job;
+    return { ...job, task: addMonthlyResetMarker(job.task) };
+  });
+  return ids.length;
 }
 
 async function resetWeekBillingByKey(weekKey) {
@@ -561,7 +581,10 @@ function renderEarnings() {
 }
 
 function renderMonthlyEarnings() {
-  const paidJobs = state.jobs.filter((job) => job.status === "Finalizado" || job.status === "Entregado");
+  const paidJobs = state.jobs.filter((job) => (
+    (job.status === "Finalizado" || job.status === "Entregado") &&
+    !isMonthlyResetJob(job)
+  ));
   const monthlyMap = new Map();
 
   for (const job of paidJobs) {
@@ -995,10 +1018,15 @@ function isWeeklyResetJob(job) {
   return hasTaskMarker(job.task, WEEKLY_RESET_PREFIX);
 }
 
+function isMonthlyResetJob(job) {
+  return hasTaskMarker(job.task, MONTHLY_RESET_PREFIX);
+}
+
 function isChargeableForWeeklyEarnings(job) {
   return (
     (job.status === "Finalizado" || job.status === "Entregado") &&
     !isWeeklyResetJob(job) &&
+    !isMonthlyResetJob(job) &&
     Number(job.estimatedCost || 0) > 0
   );
 }
@@ -1006,7 +1034,15 @@ function isChargeableForWeeklyEarnings(job) {
 function isResettableForWeeklyReset(job) {
   return (
     (job.status === "Finalizado" || job.status === "Entregado") &&
-    !isWeeklyResetJob(job)
+    !isWeeklyResetJob(job) &&
+    !isMonthlyResetJob(job)
+  );
+}
+
+function isResettableForMonthlyReset(job) {
+  return (
+    (job.status === "Finalizado" || job.status === "Entregado") &&
+    !isMonthlyResetJob(job)
   );
 }
 
@@ -1014,6 +1050,7 @@ function taskForDisplay(task) {
   return String(task || "")
     .split(DELETED_PREFIX).join("")
     .split(WEEKLY_RESET_PREFIX).join("")
+    .split(MONTHLY_RESET_PREFIX).join("")
     .trim();
 }
 
@@ -1024,13 +1061,27 @@ function hasTaskMarker(task, marker) {
 function addDeletedMarker(task) {
   const baseTask = taskForDisplay(task);
   const weeklyPrefix = hasTaskMarker(task, WEEKLY_RESET_PREFIX) ? WEEKLY_RESET_PREFIX : "";
-  return `${DELETED_PREFIX}${weeklyPrefix}${baseTask}`.trim();
+  const monthlyPrefix = hasTaskMarker(task, MONTHLY_RESET_PREFIX) ? MONTHLY_RESET_PREFIX : "";
+  return `${DELETED_PREFIX}${weeklyPrefix}${monthlyPrefix}${baseTask}`.trim();
 }
 
 function addWeeklyResetMarker(task) {
   const baseTask = taskForDisplay(task);
   const deletedPrefix = hasTaskMarker(task, DELETED_PREFIX) ? DELETED_PREFIX : "";
-  return `${deletedPrefix}${WEEKLY_RESET_PREFIX}${baseTask}`.trim();
+  const monthlyPrefix = hasTaskMarker(task, MONTHLY_RESET_PREFIX) ? MONTHLY_RESET_PREFIX : "";
+  return `${deletedPrefix}${WEEKLY_RESET_PREFIX}${monthlyPrefix}${baseTask}`.trim();
+}
+
+function addMonthlyResetMarker(task) {
+  const baseTask = taskForDisplay(task);
+  const deletedPrefix = hasTaskMarker(task, DELETED_PREFIX) ? DELETED_PREFIX : "";
+  const weeklyPrefix = hasTaskMarker(task, WEEKLY_RESET_PREFIX) ? WEEKLY_RESET_PREFIX : "";
+  return `${deletedPrefix}${weeklyPrefix}${MONTHLY_RESET_PREFIX}${baseTask}`.trim();
+}
+
+function toCurrentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function formatDate(value) {
