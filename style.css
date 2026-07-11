@@ -524,6 +524,7 @@ th {
 .weekly-records-list {
   display: grid;
   gap: 12px;
+  margin-top: 12px;
 }
 
 .week-block {
@@ -540,6 +541,12 @@ th {
   color: #ffb1b1;
   background: #1a1a1a;
   border-bottom: 1px solid var(--border);
+}
+
+.week-reset-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 @media (max-width: 980px) {

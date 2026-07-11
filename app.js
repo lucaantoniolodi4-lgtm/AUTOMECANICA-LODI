@@ -33,6 +33,8 @@ const earningsStats = document.getElementById("earnings-stats");
 const earningsChart = document.getElementById("earnings-chart");
 const resetWeeklyBillingBtn = document.getElementById("reset-weekly-billing-btn");
 const weeklyRecordsList = document.getElementById("weekly-records-list");
+const resetWeekSelect = document.getElementById("reset-week-select");
+const resetSelectedWeekBtn = document.getElementById("reset-selected-week-btn");
 const earningsModeButtons = Array.from(document.querySelectorAll(".microtab-btn"));
 const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
 
@@ -110,6 +112,23 @@ function bindEvents() {
       onError("resetear facturación semanal", error);
     }
   });
+  if (resetSelectedWeekBtn && resetWeekSelect) {
+    resetSelectedWeekBtn.addEventListener("click", async () => {
+      try {
+        const selectedWeekKey = String(resetWeekSelect.value || "");
+        if (!selectedWeekKey) {
+          window.alert("Seleccioná una semana para resetear.");
+          return;
+        }
+        const ok = window.confirm("¿Seguro que querés resetear la facturación de la semana seleccionada?");
+        if (!ok) return;
+        await resetWeekBillingByKey(selectedWeekKey);
+        render();
+      } catch (error) {
+        onError("resetear semana seleccionada", error);
+      }
+    });
+  }
 
   clientSearchBody.addEventListener("click", async (event) => {
     const target = event.target;
@@ -292,7 +311,12 @@ async function deleteJobById(id) {
 }
 
 async function resetCurrentWeekBilling() {
-  const weekJobs = jobsInCurrentWeek(state.jobs, true)
+  await resetWeekBillingByKey(currentWeekKey());
+}
+
+async function resetWeekBillingByKey(weekKey) {
+  const weekJobs = state.jobs
+    .filter((job) => weekKeyFromDate(job.date) === weekKey)
     .filter((job) => isChargeableForWeeklyEarnings(job));
   const ids = weekJobs.map((job) => job.id);
   if (ids.length === 0) return;
@@ -646,6 +670,7 @@ function renderWeeklyRecords() {
   }
 
   const orderedWeeks = Array.from(grouped.keys()).sort((a, b) => b.localeCompare(a));
+  syncWeekResetControls(orderedWeeks);
   if (orderedWeeks.length === 0) {
     weeklyRecordsList.innerHTML = "<p>No hay registros semanales.</p>";
     return;
@@ -697,6 +722,32 @@ function renderWeeklyRecords() {
     `;
     weeklyRecordsList.appendChild(details);
   }
+}
+
+function syncWeekResetControls(orderedWeeks) {
+  if (!resetWeekSelect || !resetSelectedWeekBtn) return;
+
+  if (!orderedWeeks.length) {
+    resetWeekSelect.innerHTML = `<option value="">Sin semanas disponibles</option>`;
+    resetWeekSelect.disabled = true;
+    resetSelectedWeekBtn.disabled = true;
+    return;
+  }
+
+  const previousValue = String(resetWeekSelect.value || "");
+  const preferredValue = orderedWeeks.includes(previousValue)
+    ? previousValue
+    : (orderedWeeks.includes(currentWeekKey()) ? currentWeekKey() : orderedWeeks[0]);
+
+  resetWeekSelect.innerHTML = orderedWeeks.map((weekKey) => {
+    const [year, week] = weekKey.split("-W");
+    const range = weekRangeFromKey(weekKey);
+    return `<option value="${escapeHtml(weekKey)}">Semana ${escapeHtml(week)} (${escapeHtml(year)}) - ${formatDate(range.start)} al ${formatDate(range.end)}</option>`;
+  }).join("");
+
+  resetWeekSelect.value = preferredValue;
+  resetWeekSelect.disabled = false;
+  resetSelectedWeekBtn.disabled = false;
 }
 
 function renderClientJobs(jobs) {
