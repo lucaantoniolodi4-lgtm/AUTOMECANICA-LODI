@@ -109,6 +109,8 @@ function bindEvents() {
       const updated = await resetCurrentWeekBilling();
       if (updated === 0) {
         window.alert("No hay items para resetear en la semana actual.");
+      } else {
+        window.alert(`Semana actual reseteada: ${updated} item(s).`);
       }
       render();
     } catch (error) {
@@ -128,6 +130,8 @@ function bindEvents() {
         const updated = await resetWeekBillingByKey(selectedWeekKey);
         if (updated === 0) {
           window.alert("No hay items para resetear en la semana seleccionada.");
+        } else {
+          window.alert(`Semana seleccionada reseteada: ${updated} item(s).`);
         }
         render();
       } catch (error) {
@@ -323,7 +327,7 @@ async function resetCurrentWeekBilling() {
 async function resetWeekBillingByKey(weekKey) {
   const weekJobs = state.jobs
     .filter((job) => weekKeyFromDate(job.date) === weekKey)
-    .filter((job) => isChargeableForWeeklyEarnings(job));
+    .filter((job) => isResettableForWeeklyReset(job));
   const ids = weekJobs.map((job) => job.id);
   if (ids.length === 0) return 0;
 
@@ -991,6 +995,13 @@ function isChargeableForWeeklyEarnings(job) {
     (job.status === "Finalizado" || job.status === "Entregado") &&
     !isWeeklyResetJob(job) &&
     Number(job.estimatedCost || 0) > 0
+  );
+}
+
+function isResettableForWeeklyReset(job) {
+  return (
+    (job.status === "Finalizado" || job.status === "Entregado") &&
+    !isWeeklyResetJob(job)
   );
 }
 
