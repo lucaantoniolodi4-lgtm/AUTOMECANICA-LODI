@@ -29,6 +29,7 @@ const clientSearchBody = document.getElementById("client-search-body");
 const calendarGrid = document.getElementById("calendar-grid");
 const earningsStats = document.getElementById("earnings-stats");
 const earningsChart = document.getElementById("earnings-chart");
+const weeklyRecordsList = document.getElementById("weekly-records-list");
 const earningsModeButtons = Array.from(document.querySelectorAll(".microtab-btn"));
 const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
 
@@ -37,6 +38,7 @@ const tabPanels = {
   proceso: document.getElementById("tab-proceso"),
   calendario: document.getElementById("tab-calendario"),
   ganancias: document.getElementById("tab-ganancias"),
+  registros: document.getElementById("tab-registros"),
   clientes: document.getElementById("tab-clientes")
 };
 
@@ -325,6 +327,7 @@ function render() {
   renderStats();
   renderCalendar();
   renderEarnings();
+  renderWeeklyRecords();
   renderClientSearch();
 }
 
@@ -597,6 +600,69 @@ function renderClientSearch() {
   }
 }
 
+function renderWeeklyRecords() {
+  weeklyRecordsList.innerHTML = "";
+
+  const grouped = new Map();
+  for (const job of state.jobs) {
+    const weekKey = weekKeyFromDate(job.date);
+    if (!grouped.has(weekKey)) grouped.set(weekKey, []);
+    grouped.get(weekKey).push(job);
+  }
+
+  const orderedWeeks = Array.from(grouped.keys()).sort((a, b) => b.localeCompare(a));
+  if (orderedWeeks.length === 0) {
+    weeklyRecordsList.innerHTML = "<p>No hay registros semanales.</p>";
+    return;
+  }
+
+  for (const weekKey of orderedWeeks) {
+    const weekJobs = grouped.get(weekKey).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const total = weekJobs.reduce((acc, job) => acc + Number(job.estimatedCost || 0), 0);
+    const [year, week] = weekKey.split("-W");
+
+    const details = document.createElement("details");
+    details.className = "week-block";
+    details.open = true;
+    details.innerHTML = `
+      <summary>Semana ${week} (${year}) - ${weekJobs.length} ingreso(s) - ${formatCurrency(total)}</summary>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Número</th>
+              <th>DNI</th>
+              <th>Vehículo</th>
+              <th>Patente</th>
+              <th>Trabajo</th>
+              <th>Estado</th>
+              <th>Costo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${weekJobs.map((job) => `
+              <tr>
+                <td>${formatDate(job.date)}</td>
+                <td>${escapeHtml(job.clientName)}</td>
+                <td>${escapeHtml(job.clientPhone || "-")}</td>
+                <td>${escapeHtml(job.clientDni || "-")}</td>
+                <td>${escapeHtml(job.vehicleModel || "-")}</td>
+                <td>${escapeHtml(job.vehiclePlate || "-")}</td>
+                <td>${escapeHtml(job.task || "-")}</td>
+                <td>${escapeHtml(job.status || "-")}</td>
+                <td>${formatCurrency(job.estimatedCost)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+    weeklyRecordsList.appendChild(details);
+  }
+}
+
 function renderClientJobs(jobs) {
   if (!jobs.length) return "-";
 
@@ -686,6 +752,12 @@ function getCurrentWeekDays() {
 function currentWeekKey() {
   const now = new Date();
   return `${now.getFullYear()}-W${String(getWeekNumber(now)).padStart(2, "0")}`;
+}
+
+function weekKeyFromDate(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return currentWeekKey();
+  return `${d.getFullYear()}-W${String(getWeekNumber(d)).padStart(2, "0")}`;
 }
 
 function getWeekNumber(date) {

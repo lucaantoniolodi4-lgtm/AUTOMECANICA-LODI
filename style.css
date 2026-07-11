@@ -505,6 +505,27 @@ th {
   font-size: 0.9rem;
 }
 
+.weekly-records-list {
+  display: grid;
+  gap: 12px;
+}
+
+.week-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #141414;
+  overflow: hidden;
+}
+
+.week-block summary {
+  cursor: pointer;
+  padding: 12px;
+  font-weight: 700;
+  color: #ffb1b1;
+  background: #1a1a1a;
+  border-bottom: 1px solid var(--border);
+}
+
 @media (max-width: 980px) {
   .tab-grid {
     grid-template-columns: 1fr;
