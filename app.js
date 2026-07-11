@@ -5,6 +5,7 @@ const AUTH_USER = "automecanica lodi";
 const AUTH_PASS = "familialodi";
 const AUTH_KEY = "automecanica_lodi_auth";
 const DELETED_PREFIX = "__DELETED__ ";
+const WEEKLY_RESET_PREFIX = "__WRESET__ ";
 
 const statusOrder = ["Pendiente", "En progreso", "Finalizado", "Entregado"];
 
@@ -291,15 +292,19 @@ async function deleteJobById(id) {
 }
 
 async function resetCurrentWeekBilling() {
-  const weekJobs = jobsInCurrentWeek(state.jobs, true);
+  const weekJobs = jobsInCurrentWeek(state.jobs, true)
+    .filter((job) => (job.status === "Finalizado" || job.status === "Entregado") && !isWeeklyResetJob(job));
   const ids = weekJobs.map((job) => job.id);
   if (ids.length === 0) return;
 
-  const { error } = await supabaseClient.from("jobs").update({ estimated_cost: 0 }).in("id", ids);
-  if (error) throw error;
+  const updates = weekJobs.map((job) => updateJobFields(job.id, { task: `${WEEKLY_RESET_PREFIX}${job.task}` }));
+  await Promise.all(updates);
 
   const idSet = new Set(ids);
-  state.jobs = state.jobs.map((job) => (idSet.has(job.id) ? { ...job, estimatedCost: 0 } : job));
+  state.jobs = state.jobs.map((job) => {
+    if (!idSet.has(job.id)) return job;
+    return { ...job, task: `${WEEKLY_RESET_PREFIX}${job.task}` };
+  });
 }
 
 async function rotateStatusById(id) {
@@ -491,7 +496,7 @@ function renderEarnings() {
   }
 
   const weekJobs = jobsInCurrentWeek(state.jobs, true)
-    .filter((job) => job.status === "Finalizado" || job.status === "Entregado")
+    .filter((job) => (job.status === "Finalizado" || job.status === "Entregado") && !isWeeklyResetJob(job))
     .sort((a, b) => {
       const diff = Number(a.estimatedCost || 0) - Number(b.estimatedCost || 0);
       return state.earningsMode === "weekly_asc" ? diff : -diff;
@@ -919,8 +924,14 @@ function isDeletedJob(job) {
   return String(job.task || "").startsWith(DELETED_PREFIX);
 }
 
+function isWeeklyResetJob(job) {
+  return String(job.task || "").startsWith(WEEKLY_RESET_PREFIX);
+}
+
 function taskForDisplay(task) {
-  return String(task || "").replace(DELETED_PREFIX, "");
+  return String(task || "")
+    .replace(DELETED_PREFIX, "")
+    .replace(WEEKLY_RESET_PREFIX, "");
 }
 
 function formatDate(value) {
