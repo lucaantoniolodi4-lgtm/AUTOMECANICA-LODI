@@ -395,6 +395,22 @@ th {
   flex-wrap: wrap;
 }
 
+.earnings-actions {
+  margin-top: 10px;
+}
+
+.danger-btn {
+  border: 1px solid #ff4d4d;
+  background: #2a0000;
+  color: #ffd9d9;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.danger-btn:hover {
+  background: #3a0000;
+}
+
 .microtab-btn {
   border-radius: 999px;
   border: 1px solid var(--border);

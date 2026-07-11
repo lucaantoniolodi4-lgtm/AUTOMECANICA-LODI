@@ -30,6 +30,7 @@ const clientSearchBody = document.getElementById("client-search-body");
 const calendarGrid = document.getElementById("calendar-grid");
 const earningsStats = document.getElementById("earnings-stats");
 const earningsChart = document.getElementById("earnings-chart");
+const resetWeeklyBillingBtn = document.getElementById("reset-weekly-billing-btn");
 const weeklyRecordsList = document.getElementById("weekly-records-list");
 const earningsModeButtons = Array.from(document.querySelectorAll(".microtab-btn"));
 const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
@@ -98,6 +99,16 @@ function bindEvents() {
   searchInput.addEventListener("input", render);
   statusFilter.addEventListener("change", render);
   clientSearchInput.addEventListener("input", renderClientSearch);
+  resetWeeklyBillingBtn.addEventListener("click", async () => {
+    try {
+      const ok = window.confirm("¿Seguro que querés resetear a $0 toda la facturación de la semana actual?");
+      if (!ok) return;
+      await resetCurrentWeekBilling();
+      render();
+    } catch (error) {
+      onError("resetear facturación semanal", error);
+    }
+  });
 
   clientSearchBody.addEventListener("click", async (event) => {
     const target = event.target;
@@ -277,6 +288,18 @@ async function deleteJobById(id) {
   const archivedTask = isDeletedJob(jobToDelete) ? jobToDelete.task : `${DELETED_PREFIX}${jobToDelete.task}`;
   await updateJobFields(id, { task: archivedTask });
   state.jobs = state.jobs.map((job) => (job.id === id ? { ...job, task: archivedTask } : job));
+}
+
+async function resetCurrentWeekBilling() {
+  const weekJobs = jobsInCurrentWeek(state.jobs, true);
+  const ids = weekJobs.map((job) => job.id);
+  if (ids.length === 0) return;
+
+  const { error } = await supabaseClient.from("jobs").update({ estimated_cost: 0 }).in("id", ids);
+  if (error) throw error;
+
+  const idSet = new Set(ids);
+  state.jobs = state.jobs.map((job) => (idSet.has(job.id) ? { ...job, estimatedCost: 0 } : job));
 }
 
 async function rotateStatusById(id) {
