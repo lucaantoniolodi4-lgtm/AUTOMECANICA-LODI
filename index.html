@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Automecanica Lodi</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="login-screen" class="login-screen">
+    <form id="login-form" class="login-card">
+      <h2>Acceso al sistema</h2>
+      <p>Automecanica Lodi</p>
+      <label>Usuario
+        <input id="login-user" type="text" autocomplete="username" required />
+      </label>
+      <label>Contraseña
+        <input id="login-pass" type="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit" class="primary">Ingresar</button>
+      <div id="login-error" class="login-error"></div>
+    </form>
+  </section>
+
+  <div id="app-root" class="app-root hidden">
+  <header class="topbar">
+    <h1>AUTOMECANICA LODI</h1>
+    <p>TURNOS SEMANALES</p>
+    <button id="logout-btn" class="logout-btn" type="button">Cerrar sesión</button>
+  </header>
+
+  <main class="layout">
+    <section class="tabs full">
+      <button class="tab-btn active" data-tab="turnos" type="button">Turnos semanales</button>
+      <button class="tab-btn" data-tab="proceso" type="button">En proceso</button>
+      <button class="tab-btn" data-tab="calendario" type="button">Calendario semanal</button>
+      <button class="tab-btn" data-tab="ganancias" type="button">Ganancias semanales</button>
+      <button class="tab-btn edge-right" data-tab="clientes" type="button">Buscador de clientes</button>
+    </section>
+
+    <section id="tab-turnos" class="tab-panel active tab-grid full">
+      <section class="card">
+        <h2>Nuevo trabajo</h2>
+        <form id="job-form" class="grid-form">
+          <label>Fecha
+            <input type="date" id="date" required />
+          </label>
+          <label>Cliente
+            <input type="text" id="clientName" placeholder="Nombre y apellido" required />
+          </label>
+          <label>Teléfono
+            <input type="tel" id="clientPhone" placeholder="Ej: 11 5555 5555" required />
+          </label>
+          <label>DNI
+            <input type="text" id="clientDni" placeholder="12345678" />
+          </label>
+          <label>Patente
+            <input type="text" id="vehiclePlate" placeholder="ABC123" required />
+          </label>
+          <label>Vehículo
+            <input type="text" id="vehicleModel" placeholder="Marca / Modelo" required />
+          </label>
+          <label>Trabajo a realizar
+            <input type="text" id="task" placeholder="Ej: Cambio de frenos" required />
+          </label>
+          <label>Estado
+            <select id="status" required>
+              <option value="Pendiente">Pendiente</option>
+              <option value="En progreso">En progreso</option>
+              <option value="Finalizado">Finalizado</option>
+              <option value="Entregado">Entregado</option>
+            </select>
+          </label>
+          <label>Costo estimado
+            <input type="number" id="estimatedCost" min="0" step="0.01" placeholder="0.00" />
+          </label>
+          <button type="submit" class="primary">Guardar trabajo</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Estadísticas semanales</h2>
+        <div id="stats" class="stats"></div>
+        <div id="bars" class="bars"></div>
+      </section>
+
+      <section class="card full">
+        <div class="table-header">
+          <h2>Listado de trabajos</h2>
+          <div class="filters">
+            <input id="search" type="search" placeholder="Buscar por cliente, patente o trabajo..." />
+            <select id="statusFilter">
+              <option value="">Todos los estados</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="En progreso">En progreso</option>
+              <option value="Finalizado">Finalizado</option>
+              <option value="Entregado">Entregado</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Teléfono</th>
+                <th>Auto</th>
+                <th>Patente</th>
+                <th>Trabajo</th>
+                <th>Estado</th>
+                <th>Costo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="jobs-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section id="tab-proceso" class="tab-panel full" hidden>
+      <section class="card full">
+        <h2>Trabajos en proceso</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Auto</th>
+                <th>Patente</th>
+                <th>Trabajo</th>
+                <th>Estado</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="in-process-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section id="tab-calendario" class="tab-panel full" hidden>
+      <section class="card full">
+        <h2>Calendario semanal</h2>
+        <div id="calendar-grid" class="calendar-grid"></div>
+      </section>
+    </section>
+
+    <section id="tab-ganancias" class="tab-panel full" hidden>
+      <section class="card full">
+        <h2>Ganancias totales semanales</h2>
+        <div class="microtabs">
+          <button class="microtab-btn active" data-earnings-mode="weekly_desc" type="button">Semanal mayor a menor</button>
+          <button class="microtab-btn" data-earnings-mode="weekly_asc" type="button">Semanal menor a mayor</button>
+          <button class="microtab-btn" data-earnings-mode="monthly_total" type="button">Total mensual</button>
+        </div>
+        <div id="earnings-stats" class="stats"></div>
+        <div id="earnings-chart" class="chart-grid"></div>
+      </section>
+    </section>
+
+    <section id="tab-clientes" class="tab-panel full" hidden>
+      <section class="card full">
+        <h2>Buscador de clientes</h2>
+        <div class="client-search-box">
+          <input id="client-search-input" type="search" placeholder="Buscar por cliente, teléfono, vehículo o patente..." />
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Teléfono</th>
+                <th>Vehículo</th>
+                <th>Patente</th>
+                <th>DNI</th>
+                <th>Fecha de ingreso al taller</th>
+                <th>Trabajos realizados</th>
+              </tr>
+            </thead>
+            <tbody id="client-search-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+  </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
