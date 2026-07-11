@@ -293,7 +293,7 @@ async function deleteJobById(id) {
 
 async function resetCurrentWeekBilling() {
   const weekJobs = jobsInCurrentWeek(state.jobs, true)
-    .filter((job) => (job.status === "Finalizado" || job.status === "Entregado") && !isWeeklyResetJob(job));
+    .filter((job) => isChargeableForWeeklyEarnings(job));
   const ids = weekJobs.map((job) => job.id);
   if (ids.length === 0) return;
 
@@ -496,7 +496,7 @@ function renderEarnings() {
   }
 
   const weekJobs = jobsInCurrentWeek(state.jobs, true)
-    .filter((job) => (job.status === "Finalizado" || job.status === "Entregado") && !isWeeklyResetJob(job))
+    .filter((job) => isChargeableForWeeklyEarnings(job))
     .sort((a, b) => {
       const diff = Number(a.estimatedCost || 0) - Number(b.estimatedCost || 0);
       return state.earningsMode === "weekly_asc" ? diff : -diff;
@@ -926,6 +926,14 @@ function isDeletedJob(job) {
 
 function isWeeklyResetJob(job) {
   return String(job.task || "").startsWith(WEEKLY_RESET_PREFIX);
+}
+
+function isChargeableForWeeklyEarnings(job) {
+  return (
+    (job.status === "Finalizado" || job.status === "Entregado") &&
+    !isWeeklyResetJob(job) &&
+    Number(job.estimatedCost || 0) > 0
+  );
 }
 
 function taskForDisplay(task) {
