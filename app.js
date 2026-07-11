@@ -106,7 +106,10 @@ function bindEvents() {
     try {
       const ok = window.confirm("¿Seguro que querés resetear a $0 toda la facturación de la semana actual?");
       if (!ok) return;
-      await resetCurrentWeekBilling();
+      const updated = await resetCurrentWeekBilling();
+      if (updated === 0) {
+        window.alert("No hay items para resetear en la semana actual.");
+      }
       render();
     } catch (error) {
       onError("resetear facturación semanal", error);
@@ -122,7 +125,10 @@ function bindEvents() {
         }
         const ok = window.confirm("¿Seguro que querés resetear la facturación de la semana seleccionada?");
         if (!ok) return;
-        await resetWeekBillingByKey(selectedWeekKey);
+        const updated = await resetWeekBillingByKey(selectedWeekKey);
+        if (updated === 0) {
+          window.alert("No hay items para resetear en la semana seleccionada.");
+        }
         render();
       } catch (error) {
         onError("resetear semana seleccionada", error);
@@ -305,13 +311,13 @@ async function deleteJobById(id) {
   if (!jobToDelete) return;
   await upsertClientFromJob(jobToDelete);
 
-  const archivedTask = isDeletedJob(jobToDelete) ? jobToDelete.task : `${DELETED_PREFIX}${jobToDelete.task}`;
+  const archivedTask = addDeletedMarker(jobToDelete.task);
   await updateJobFields(id, { task: archivedTask });
   state.jobs = state.jobs.map((job) => (job.id === id ? { ...job, task: archivedTask } : job));
 }
 
 async function resetCurrentWeekBilling() {
-  await resetWeekBillingByKey(currentWeekKey());
+  return resetWeekBillingByKey(currentWeekKey());
 }
 
 async function resetWeekBillingByKey(weekKey) {
@@ -319,16 +325,17 @@ async function resetWeekBillingByKey(weekKey) {
     .filter((job) => weekKeyFromDate(job.date) === weekKey)
     .filter((job) => isChargeableForWeeklyEarnings(job));
   const ids = weekJobs.map((job) => job.id);
-  if (ids.length === 0) return;
+  if (ids.length === 0) return 0;
 
-  const updates = weekJobs.map((job) => updateJobFields(job.id, { task: `${WEEKLY_RESET_PREFIX}${job.task}` }));
+  const updates = weekJobs.map((job) => updateJobFields(job.id, { task: addWeeklyResetMarker(job.task) }));
   await Promise.all(updates);
 
   const idSet = new Set(ids);
   state.jobs = state.jobs.map((job) => {
     if (!idSet.has(job.id)) return job;
-    return { ...job, task: `${WEEKLY_RESET_PREFIX}${job.task}` };
+    return { ...job, task: addWeeklyResetMarker(job.task) };
   });
+  return ids.length;
 }
 
 async function rotateStatusById(id) {
@@ -972,11 +979,11 @@ function statusClass(status) {
 }
 
 function isDeletedJob(job) {
-  return String(job.task || "").startsWith(DELETED_PREFIX);
+  return hasTaskMarker(job.task, DELETED_PREFIX);
 }
 
 function isWeeklyResetJob(job) {
-  return String(job.task || "").startsWith(WEEKLY_RESET_PREFIX);
+  return hasTaskMarker(job.task, WEEKLY_RESET_PREFIX);
 }
 
 function isChargeableForWeeklyEarnings(job) {
@@ -989,8 +996,25 @@ function isChargeableForWeeklyEarnings(job) {
 
 function taskForDisplay(task) {
   return String(task || "")
-    .replace(DELETED_PREFIX, "")
-    .replace(WEEKLY_RESET_PREFIX, "");
+    .split(DELETED_PREFIX).join("")
+    .split(WEEKLY_RESET_PREFIX).join("")
+    .trim();
+}
+
+function hasTaskMarker(task, marker) {
+  return String(task || "").includes(marker);
+}
+
+function addDeletedMarker(task) {
+  const baseTask = taskForDisplay(task);
+  const weeklyPrefix = hasTaskMarker(task, WEEKLY_RESET_PREFIX) ? WEEKLY_RESET_PREFIX : "";
+  return `${DELETED_PREFIX}${weeklyPrefix}${baseTask}`.trim();
+}
+
+function addWeeklyResetMarker(task) {
+  const baseTask = taskForDisplay(task);
+  const deletedPrefix = hasTaskMarker(task, DELETED_PREFIX) ? DELETED_PREFIX : "";
+  return `${deletedPrefix}${WEEKLY_RESET_PREFIX}${baseTask}`.trim();
 }
 
 function formatDate(value) {
