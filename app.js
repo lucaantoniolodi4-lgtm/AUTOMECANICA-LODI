@@ -1,11 +1,13 @@
-const DB_NAME = "automecanica_lodi_db";
-const DB_VERSION = 2;
-const JOBS_STORE = "jobs";
-const WEEKLY_STORE = "weekly_stats";
-const CLIENTS_STORE = "clients";
+const SUPABASE_URL = "https://bdyxrbafmpeeeribmveg.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_IyIEX7WV3d6b7-RcrQiMTg_aNR1UIbo";
+
 const AUTH_USER = "automecanica lodi";
 const AUTH_PASS = "familialodi";
 const AUTH_KEY = "automecanica_lodi_auth";
+
+const statusOrder = ["Pendiente", "En progreso", "Finalizado", "Entregado"];
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const loginScreen = document.getElementById("login-screen");
 const appRoot = document.getElementById("app-root");
@@ -24,13 +26,12 @@ const statsContainer = document.getElementById("stats");
 const barsContainer = document.getElementById("bars");
 const clientSearchInput = document.getElementById("client-search-input");
 const clientSearchBody = document.getElementById("client-search-body");
-const weeklyBody = document.getElementById("weekly-body");
 const calendarGrid = document.getElementById("calendar-grid");
 const earningsStats = document.getElementById("earnings-stats");
 const earningsChart = document.getElementById("earnings-chart");
 const earningsModeButtons = Array.from(document.querySelectorAll(".microtab-btn"));
-
 const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
+
 const tabPanels = {
   turnos: document.getElementById("tab-turnos"),
   proceso: document.getElementById("tab-proceso"),
@@ -39,10 +40,7 @@ const tabPanels = {
   clientes: document.getElementById("tab-clientes")
 };
 
-const statusOrder = ["Pendiente", "En progreso", "Finalizado", "Entregado"];
-
 const state = {
-  db: null,
   jobs: [],
   clients: [],
   earningsMode: "weekly_desc",
@@ -58,7 +56,7 @@ function boot() {
 
   if (sessionStorage.getItem(AUTH_KEY) === "1") {
     showApp();
-    initApp().catch((error) => console.error("Error de inicialización:", error));
+    initApp().catch((error) => onError("Inicialización", error));
     return;
   }
 
@@ -69,16 +67,89 @@ async function initApp() {
   if (state.initialized) return;
   state.initialized = true;
 
-  state.db = await openDatabase();
-  state.jobs = await getAllFromStore(state.db, JOBS_STORE);
-  state.clients = await getAllFromStore(state.db, CLIENTS_STORE);
-
-  await migrateClientsFromJobsIfNeeded();
+  await loadCloudData();
+  await migrateClientsFromJobs();
 
   setTodayAsDefault();
   bindEvents();
-  await refreshDerivedData();
   render();
+}
+
+function bindEvents() {
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const job = buildJobFromForm();
+
+      await insertJob(job);
+      await upsertClientFromJob(job);
+      state.jobs.unshift(job);
+
+      form.reset();
+      setTodayAsDefault();
+      render();
+    } catch (error) {
+      onError("guardar trabajo", error);
+    }
+  });
+
+  searchInput.addEventListener("input", render);
+  statusFilter.addEventListener("change", render);
+  clientSearchInput.addEventListener("input", renderClientSearch);
+
+  jobsBody.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const action = target.getAttribute("data-action");
+    const id = target.getAttribute("data-id");
+    if (!action || !id) return;
+
+    try {
+      if (action === "delete") {
+        await deleteJobById(id);
+      } else if (action === "next-status") {
+        await rotateStatusById(id);
+      }
+
+      render();
+    } catch (error) {
+      onError("actualizar trabajo", error);
+    }
+  });
+
+  inProcessBody.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const action = target.getAttribute("data-action");
+    const id = target.getAttribute("data-id");
+    if (action !== "finalize" || !id) return;
+
+    try {
+      await setStatusById(id, "Finalizado");
+      render();
+    } catch (error) {
+      onError("cambiar estado", error);
+    }
+  });
+
+  for (const button of tabButtons) {
+    button.addEventListener("click", () => {
+      const tab = button.dataset.tab;
+      if (!tab) return;
+      syncTabsVisibility(tab);
+    });
+  }
+
+  for (const button of earningsModeButtons) {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.earningsMode;
+      if (!mode) return;
+      state.earningsMode = mode;
+      renderEarnings();
+    });
+  }
 }
 
 function handleLoginSubmit(event) {
@@ -90,7 +161,7 @@ function handleLoginSubmit(event) {
     sessionStorage.setItem(AUTH_KEY, "1");
     loginError.textContent = "";
     showApp();
-    initApp().catch((error) => console.error("Error de inicialización:", error));
+    initApp().catch((error) => onError("Inicialización", error));
     return;
   }
 
@@ -115,76 +186,6 @@ function showApp() {
   appRoot.classList.remove("hidden");
 }
 
-function bindEvents() {
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const job = buildJobFromForm();
-    state.jobs.unshift(job);
-    await putInStore(state.db, JOBS_STORE, job);
-    await upsertClientFromJob(job);
-    form.reset();
-    setTodayAsDefault();
-    await refreshDerivedData();
-    render();
-  });
-
-  searchInput.addEventListener("input", render);
-  statusFilter.addEventListener("change", render);
-  clientSearchInput.addEventListener("input", renderClientSearch);
-
-  jobsBody.addEventListener("click", async (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-
-    const action = target.getAttribute("data-action");
-    const id = target.getAttribute("data-id");
-    if (!action || !id) return;
-
-    if (action === "delete") {
-      await deleteJobById(id);
-    } else if (action === "next-status") {
-      await rotateStatusById(id);
-    }
-
-    await refreshDerivedData();
-    render();
-  });
-
-  inProcessBody.addEventListener("click", async (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-
-    const action = target.getAttribute("data-action");
-    const id = target.getAttribute("data-id");
-    if (action !== "finalize" || !id) return;
-
-    await setStatusById(id, "Finalizado");
-    await refreshDerivedData();
-    render();
-  });
-
-  for (const button of tabButtons) {
-    button.addEventListener("click", () => {
-      const tab = button.dataset.tab;
-      if (!tab) return;
-      activateTab(tab);
-    });
-  }
-
-  for (const button of earningsModeButtons) {
-    button.addEventListener("click", () => {
-      const mode = button.dataset.earningsMode;
-      if (!mode) return;
-      setEarningsMode(mode);
-      renderEarnings();
-    });
-  }
-}
-
-function activateTab(tabName) {
-  syncTabsVisibility(tabName);
-}
-
 function syncTabsVisibility(tabName) {
   for (const button of tabButtons) {
     button.classList.toggle("active", button.dataset.tab === tabName);
@@ -198,14 +199,21 @@ function syncTabsVisibility(tabName) {
   }
 }
 
-async function refreshDerivedData() {
-  const snapshot = buildWeeklySnapshot(state.jobs);
-  await putInStore(state.db, WEEKLY_STORE, snapshot);
-}
+async function loadCloudData() {
+  const jobsResp = await supabaseClient
+    .from("jobs")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (jobsResp.error) throw jobsResp.error;
 
-function setTodayAsDefault() {
-  const dateField = document.getElementById("date");
-  dateField.value = new Date().toISOString().slice(0, 10);
+  const clientsResp = await supabaseClient
+    .from("clients")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (clientsResp.error) throw clientsResp.error;
+
+  state.jobs = (jobsResp.data || []).map(mapJobRowToModel);
+  state.clients = (clientsResp.data || []).map(mapClientRowToModel);
 }
 
 function buildJobFromForm() {
@@ -224,21 +232,77 @@ function buildJobFromForm() {
   };
 }
 
-function filteredJobs() {
-  const text = searchInput.value.trim().toLowerCase();
-  const status = statusFilter.value;
+async function insertJob(job) {
+  const { error } = await supabaseClient.from("jobs").insert(mapJobModelToRow(job));
+  if (error) throw error;
+}
 
-  return state.jobs.filter((job) => {
-    const matchesStatus = !status || job.status === status;
-    if (!matchesStatus) return false;
-    if (!text) return true;
+async function updateJobStatus(id, status) {
+  const { error } = await supabaseClient.from("jobs").update({ status }).eq("id", id);
+  if (error) throw error;
+}
 
-    return (
-      job.clientName.toLowerCase().includes(text) ||
-      job.vehiclePlate.toLowerCase().includes(text) ||
-      job.task.toLowerCase().includes(text)
-    );
-  });
+async function deleteJobCloud(id) {
+  const { error } = await supabaseClient.from("jobs").delete().eq("id", id);
+  if (error) throw error;
+}
+
+async function deleteJobById(id) {
+  const jobToDelete = state.jobs.find((job) => job.id === id);
+  if (jobToDelete) {
+    await upsertClientFromJob(jobToDelete);
+  }
+
+  await deleteJobCloud(id);
+  state.jobs = state.jobs.filter((job) => job.id !== id);
+}
+
+async function rotateStatusById(id) {
+  const job = state.jobs.find((item) => item.id === id);
+  if (!job) return;
+  const idx = statusOrder.indexOf(job.status);
+  const next = statusOrder[(idx + 1) % statusOrder.length];
+  await setStatusById(id, next);
+}
+
+async function setStatusById(id, status) {
+  await updateJobStatus(id, status);
+  state.jobs = state.jobs.map((job) => (job.id === id ? { ...job, status } : job));
+}
+
+async function upsertClientFromJob(job) {
+  const id = clientKey(job.clientName, job.clientPhone);
+  const existing = state.clients.find((item) => item.id === id);
+  const history = existing && Array.isArray(existing.jobs) ? existing.jobs.slice() : [];
+
+  if (!history.some((entry) => entry.date === job.date && entry.task === job.task)) {
+    history.push({ date: job.date, task: job.task });
+  }
+
+  const client = {
+    id,
+    clientName: job.clientName,
+    clientPhone: job.clientPhone,
+    clientDni: job.clientDni || (existing && existing.clientDni) || "",
+    vehicleModel: job.vehicleModel,
+    vehiclePlate: job.vehiclePlate,
+    firstSeenAt: existing && existing.firstSeenAt ? existing.firstSeenAt : job.date,
+    jobs: history.sort((a, b) => String(a.date).localeCompare(String(b.date))),
+    updatedAt: Date.now()
+  };
+
+  const { error } = await supabaseClient.from("clients").upsert(mapClientModelToRow(client));
+  if (error) throw error;
+
+  const idx = state.clients.findIndex((item) => item.id === client.id);
+  if (idx === -1) state.clients.push(client);
+  else state.clients[idx] = client;
+}
+
+async function migrateClientsFromJobs() {
+  for (const job of [...state.jobs].sort((a, b) => Number(a.createdAt) - Number(b.createdAt))) {
+    await upsertClientFromJob(job);
+  }
 }
 
 function render() {
@@ -250,9 +314,23 @@ function render() {
   renderClientSearch();
 }
 
+function filteredJobs() {
+  const text = searchInput.value.trim().toLowerCase();
+  const status = statusFilter.value;
+
+  return state.jobs.filter((job) => {
+    if (status && job.status !== status) return false;
+    if (!text) return true;
+    return (
+      job.clientName.toLowerCase().includes(text) ||
+      job.vehiclePlate.toLowerCase().includes(text) ||
+      job.task.toLowerCase().includes(text)
+    );
+  });
+}
+
 function renderTable(jobs) {
   jobsBody.innerHTML = "";
-
   if (jobs.length === 0) {
     jobsBody.innerHTML = `<tr><td colspan="9">No hay registros para mostrar.</td></tr>`;
     return;
@@ -270,8 +348,8 @@ function renderTable(jobs) {
       <td><span class="badge ${statusClass(job.status)}">${job.status}</span></td>
       <td>${formatCurrency(job.estimatedCost)}</td>
       <td>
-        <button class="icon-btn" data-action="next-status" data-id="${job.id}" title="Avanzar estado">Estado</button>
-        <button class="icon-btn" data-action="delete" data-id="${job.id}" title="Eliminar">Eliminar</button>
+        <button class="icon-btn" data-action="next-status" data-id="${job.id}">Estado</button>
+        <button class="icon-btn" data-action="delete" data-id="${job.id}">Eliminar</button>
       </td>
     `;
     jobsBody.appendChild(row);
@@ -282,7 +360,7 @@ function renderInProcessTable() {
   inProcessBody.innerHTML = "";
   const inProcessJobs = state.jobs
     .filter((job) => job.status === "En progreso")
-    .sort((a, b) => b.createdAt - a.createdAt);
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 
   if (inProcessJobs.length === 0) {
     inProcessBody.innerHTML = `<tr><td colspan="7">No hay trabajos en proceso.</td></tr>`;
@@ -325,11 +403,10 @@ function renderStats() {
   const max = Math.max(1, ...Object.values(byStatus));
   barsContainer.innerHTML = statusOrder.map((status) => {
     const value = byStatus[status] || 0;
-    const width = (value / max) * 100;
     return `
       <div class="bar-row">
         <span>${status}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${width}%"></div></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(value / max) * 100}%"></div></div>
         <strong>${value}</strong>
       </div>
     `;
@@ -345,7 +422,6 @@ function renderCalendar() {
     const jobs = jobsByDay.get(day.key) || [];
     const card = document.createElement("article");
     card.className = "calendar-day";
-
     const list = jobs.length === 0
       ? "<li>Sin turnos</li>"
       : jobs.map((job) => `<li>${escapeHtml(job.clientName)} - ${escapeHtml(job.task)}</li>`).join("");
@@ -375,7 +451,6 @@ function renderEarnings() {
     });
 
   const total = weekJobs.reduce((acc, item) => acc + Number(item.estimatedCost || 0), 0);
-
   earningsStats.innerHTML = `
     <div class="stat"><div class="label">Ganancia semanal total</div><div class="value">${formatCurrency(total)}</div></div>
     <div class="stat"><div class="label">Trabajos cobrados</div><div class="value">${weekJobs.length}</div></div>
@@ -387,14 +462,14 @@ function renderEarnings() {
     return;
   }
 
-  const items = weekJobs.map((job) => ({
-    label: `${job.clientName} - ${job.task}`,
-    value: Number(job.estimatedCost || 0)
-  }));
   const caption = state.earningsMode === "weekly_asc"
     ? "Ordenado por dinero ganado: menor a mayor"
     : "Ordenado por dinero ganado: mayor a menor";
 
+  const items = weekJobs.map((job) => ({
+    label: `${job.clientName} - ${job.task}`,
+    value: Number(job.estimatedCost || 0)
+  }));
   earningsChart.innerHTML = buildPointsChartMarkup(items, caption);
 }
 
@@ -445,21 +520,14 @@ function buildPointsChartMarkup(items, caption) {
   });
 
   const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
-  const dots = points.map((p) => {
-    const label = `${escapeHtml(p.item.label)} (${formatCurrency(p.value)})`;
-    return `<circle cx="${p.x}" cy="${p.y}" r="5" class="dot-point"><title>${label}</title></circle>`;
-  }).join("");
-
-  const labels = points.map((p, i) => {
-    const name = escapeHtml(p.item.label);
-    return `
-      <div class="point-row">
-        <span class="point-rank">#${i + 1}</span>
-        <span class="point-job">${name}</span>
-        <strong class="point-money">${formatCurrency(p.value)}</strong>
-      </div>
-    `;
-  }).join("");
+  const dots = points.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="5" class="dot-point"><title>${escapeHtml(p.item.label)} (${formatCurrency(p.value)})</title></circle>`).join("");
+  const labels = points.map((p, i) => `
+    <div class="point-row">
+      <span class="point-rank">#${i + 1}</span>
+      <span class="point-job">${escapeHtml(p.item.label)}</span>
+      <strong class="point-money">${formatCurrency(p.value)}</strong>
+    </div>
+  `).join("");
 
   return `
     <div class="points-chart-wrap">
@@ -477,16 +545,6 @@ function buildPointsChartMarkup(items, caption) {
   `;
 }
 
-function setEarningsMode(mode) {
-  state.earningsMode = mode;
-}
-
-function syncEarningsModeButtons() {
-  for (const button of earningsModeButtons) {
-    button.classList.toggle("active", button.dataset.earningsMode === state.earningsMode);
-  }
-}
-
 function renderClientSearch() {
   const text = clientSearchInput.value.trim().toLowerCase();
   clientSearchBody.innerHTML = "";
@@ -499,7 +557,8 @@ function renderClientSearch() {
         String(client.clientName || "").toLowerCase().includes(text) ||
         String(client.clientPhone || "").toLowerCase().includes(text) ||
         String(client.vehicleModel || "").toLowerCase().includes(text) ||
-        String(client.vehiclePlate || "").toLowerCase().includes(text)
+        String(client.vehiclePlate || "").toLowerCase().includes(text) ||
+        String(client.clientDni || "").toLowerCase().includes(text)
       );
     });
 
@@ -510,22 +569,21 @@ function renderClientSearch() {
 
   for (const client of clients) {
     const row = document.createElement("tr");
-    const jobsHtml = renderClientJobs(client.jobs || []);
     row.innerHTML = `
       <td>${escapeHtml(client.clientName)}</td>
-      <td>${escapeHtml(client.clientPhone)}</td>
       <td>${escapeHtml(client.vehicleModel)}</td>
       <td>${escapeHtml(client.vehiclePlate)}</td>
+      <td>${escapeHtml(client.clientPhone)}</td>
       <td>${escapeHtml(client.clientDni || "-")}</td>
       <td>${formatDate(client.firstSeenAt || "")}</td>
-      <td>${jobsHtml}</td>
+      <td>${renderClientJobs(client.jobs || [])}</td>
     `;
     clientSearchBody.appendChild(row);
   }
 }
 
 function renderClientJobs(jobs) {
-  if (!jobs || jobs.length === 0) return "-";
+  if (!jobs.length) return "-";
 
   return `
     <div class="client-jobs">
@@ -534,68 +592,24 @@ function renderClientJobs(jobs) {
   `;
 }
 
-async function deleteJobById(id) {
-  const jobToDelete = state.jobs.find((job) => job.id === id);
-  if (jobToDelete) {
-    await upsertClientFromJob(jobToDelete);
-  }
-
-  state.jobs = state.jobs.filter((job) => job.id !== id);
-  await deleteFromStore(state.db, JOBS_STORE, id);
-}
-
-async function rotateStatusById(id) {
-  state.jobs = state.jobs.map((job) => {
-    if (job.id !== id) return job;
-    const idx = statusOrder.indexOf(job.status);
-    const next = statusOrder[(idx + 1) % statusOrder.length];
-    return { ...job, status: next };
-  });
-
-  const edited = state.jobs.find((job) => job.id === id);
-  if (edited) {
-    await putInStore(state.db, JOBS_STORE, edited);
+function syncEarningsModeButtons() {
+  for (const button of earningsModeButtons) {
+    button.classList.toggle("active", button.dataset.earningsMode === state.earningsMode);
   }
 }
 
-async function setStatusById(id, status) {
-  state.jobs = state.jobs.map((job) => (job.id === id ? { ...job, status } : job));
-  const edited = state.jobs.find((job) => job.id === id);
-  if (edited) {
-    await putInStore(state.db, JOBS_STORE, edited);
-  }
-}
-
-function buildWeeklySnapshot(jobs) {
-  const weekJobs = jobsInCurrentWeek(jobs);
-  let revenue = 0;
-  let completedJobs = 0;
-
-  for (const job of weekJobs) {
-    if (job.status === "Finalizado" || job.status === "Entregado") {
-      completedJobs += 1;
-      revenue += job.estimatedCost || 0;
-    }
-  }
-
-  return {
-    weekKey: currentWeekKey(),
-    totalJobs: weekJobs.length,
-    completedJobs,
-    revenue,
-    updatedAt: Date.now()
-  };
+function setTodayAsDefault() {
+  const dateField = document.getElementById("date");
+  dateField.value = new Date().toISOString().slice(0, 10);
 }
 
 function jobsInCurrentWeek(jobs) {
   const now = new Date();
   const day = now.getDay();
   const diffToMonday = day === 0 ? 6 : day - 1;
-
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   start.setDate(now.getDate() - diffToMonday);
-
   const end = new Date(start);
   end.setDate(start.getDate() + 7);
 
@@ -603,6 +617,25 @@ function jobsInCurrentWeek(jobs) {
     const d = new Date(job.date + "T00:00:00");
     return d >= start && d < end;
   });
+}
+
+function buildWeeklySnapshot(jobs) {
+  const weekJobs = jobsInCurrentWeek(jobs);
+  let revenue = 0;
+  let completedJobs = 0;
+  for (const job of weekJobs) {
+    if (job.status === "Finalizado" || job.status === "Entregado") {
+      completedJobs += 1;
+      revenue += job.estimatedCost || 0;
+    }
+  }
+  return {
+    weekKey: currentWeekKey(),
+    totalJobs: weekJobs.length,
+    completedJobs,
+    revenue,
+    updatedAt: Date.now()
+  };
 }
 
 function groupWeekJobsByDate(jobs) {
@@ -625,19 +658,27 @@ function getCurrentWeekDays() {
   const monday = new Date(now);
   monday.setHours(0, 0, 0, 0);
   monday.setDate(now.getDate() - diffToMonday);
-
-  const dayNames = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+  const names = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
   const result = [];
-
   for (let i = 0; i < 7; i += 1) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    result.push({
-      key: toISODate(d),
-      name: dayNames[i]
-    });
+    result.push({ key: toISODate(d), name: names[i] });
   }
   return result;
+}
+
+function currentWeekKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-W${String(getWeekNumber(now)).padStart(2, "0")}`;
+}
+
+function getWeekNumber(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
 }
 
 function toISODate(date) {
@@ -647,19 +688,75 @@ function toISODate(date) {
   return `${y}-${m}-${d}`;
 }
 
-function currentWeekKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const week = getWeekNumber(now);
-  return `${year}-W${String(week).padStart(2, "0")}`;
+function mapJobModelToRow(job) {
+  return {
+    id: job.id,
+    date: job.date,
+    client_name: job.clientName,
+    client_phone: job.clientPhone,
+    client_dni: job.clientDni || "",
+    vehicle_plate: job.vehiclePlate,
+    vehicle_model: job.vehicleModel,
+    task: job.task,
+    status: job.status,
+    estimated_cost: Number(job.estimatedCost || 0),
+    created_at: Number(job.createdAt || Date.now())
+  };
 }
 
-function getWeekNumber(date) {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+function mapJobRowToModel(row) {
+  return {
+    id: row.id,
+    date: row.date,
+    clientName: row.client_name || "",
+    clientPhone: row.client_phone || "",
+    clientDni: row.client_dni || "",
+    vehiclePlate: row.vehicle_plate || "",
+    vehicleModel: row.vehicle_model || "",
+    task: row.task || "",
+    status: row.status || "Pendiente",
+    estimatedCost: Number(row.estimated_cost || 0),
+    createdAt: Number(row.created_at || Date.now())
+  };
+}
+
+function mapClientModelToRow(client) {
+  return {
+    id: client.id,
+    client_name: client.clientName,
+    client_phone: client.clientPhone,
+    client_dni: client.clientDni || "",
+    vehicle_model: client.vehicleModel,
+    vehicle_plate: client.vehiclePlate,
+    first_seen_at: client.firstSeenAt || null,
+    jobs: client.jobs || [],
+    updated_at: Number(client.updatedAt || Date.now())
+  };
+}
+
+function mapClientRowToModel(row) {
+  return {
+    id: row.id,
+    clientName: row.client_name || "",
+    clientPhone: row.client_phone || "",
+    clientDni: row.client_dni || "",
+    vehicleModel: row.vehicle_model || "",
+    vehiclePlate: row.vehicle_plate || "",
+    firstSeenAt: row.first_seen_at || "",
+    jobs: Array.isArray(row.jobs) ? row.jobs : [],
+    updatedAt: Number(row.updated_at || Date.now())
+  };
+}
+
+function clientKey(clientName, clientPhone) {
+  return `${clientName.trim().toLowerCase()}__${clientPhone.trim()}`;
+}
+
+function makeId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function statusClass(status) {
@@ -689,106 +786,8 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function makeId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
-function clientKey(clientName, clientPhone) {
-  return `${clientName.trim().toLowerCase()}__${clientPhone.trim()}`;
-}
-
-async function upsertClientFromJob(job) {
-  const existing = state.clients.find((client) => client.id === clientKey(job.clientName, job.clientPhone));
-  const history = existing && Array.isArray(existing.jobs) ? existing.jobs.slice() : [];
-  if (!history.some((entry) => entry.date === job.date && entry.task === job.task)) {
-    history.push({ date: job.date, task: job.task });
-  }
-
-  const client = {
-    id: clientKey(job.clientName, job.clientPhone),
-    clientName: job.clientName,
-    clientPhone: job.clientPhone,
-    clientDni: job.clientDni || (existing && existing.clientDni) || "",
-    vehicleModel: job.vehicleModel,
-    vehiclePlate: job.vehiclePlate,
-    firstSeenAt: existing && existing.firstSeenAt ? existing.firstSeenAt : job.date,
-    jobs: history.sort((a, b) => String(a.date).localeCompare(String(b.date))),
-    updatedAt: Date.now()
-  };
-
-  await putInStore(state.db, CLIENTS_STORE, client);
-  const idx = state.clients.findIndex((item) => item.id === client.id);
-  if (idx === -1) {
-    state.clients.push(client);
-  } else {
-    state.clients[idx] = client;
-  }
-}
-
-async function migrateClientsFromJobsIfNeeded() {
-  const ordered = [...state.jobs].sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
-  for (const job of ordered) {
-    await upsertClientFromJob(job);
-  }
-}
-
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-
-      if (!db.objectStoreNames.contains(JOBS_STORE)) {
-        db.createObjectStore(JOBS_STORE, { keyPath: "id" });
-      }
-
-      if (!db.objectStoreNames.contains(WEEKLY_STORE)) {
-        db.createObjectStore(WEEKLY_STORE, { keyPath: "weekKey" });
-      }
-
-      if (!db.objectStoreNames.contains(CLIENTS_STORE)) {
-        db.createObjectStore(CLIENTS_STORE, { keyPath: "id" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function getAllFromStore(db, storeName) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const store = tx.objectStore(storeName);
-    const request = store.getAll();
-
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function putInStore(db, storeName, value) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    const request = store.put(value);
-
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
-function deleteFromStore(db, storeName, key) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const store = tx.objectStore(storeName);
-    const request = store.delete(key);
-
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+function onError(action, error) {
+  console.error(`${action}:`, error);
+  const msg = typeof error === "string" ? error : (error && error.message) ? error.message : "Error desconocido";
+  alert(`Error en ${action}: ${msg}`);
 }
