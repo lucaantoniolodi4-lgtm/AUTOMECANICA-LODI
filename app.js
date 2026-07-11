@@ -293,12 +293,6 @@ async function upsertClientFromJob(job) {
     history.push({ date: job.date, task: job.task });
   }
 
-  async function deleteClientById(id) {
-    const { error } = await supabaseClient.from("clients").delete().eq("id", id);
-    if (error) throw error;
-    state.clients = state.clients.filter((client) => client.id !== id);
-  }
-
   const client = {
     id,
     clientName: job.clientName,
@@ -317,6 +311,12 @@ async function upsertClientFromJob(job) {
   const idx = state.clients.findIndex((item) => item.id === client.id);
   if (idx === -1) state.clients.push(client);
   else state.clients[idx] = client;
+}
+
+async function deleteClientById(id) {
+  const { error } = await supabaseClient.from("clients").delete().eq("id", id);
+  if (error) throw error;
+  state.clients = state.clients.filter((client) => client.id !== id);
 }
 
 function render() {
