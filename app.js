@@ -4,6 +4,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_IyIEX7WV3d6b7-RcrQiMTg_aNR1UIbo";
 const AUTH_USER = "automecanica lodi";
 const AUTH_PASS = "familialodi";
 const AUTH_KEY = "automecanica_lodi_auth";
+const DELETED_PREFIX = "__DELETED__ ";
 
 const statusOrder = ["Pendiente", "En progreso", "Finalizado", "Entregado"];
 
@@ -258,6 +259,11 @@ async function updateJobStatus(id, status) {
   if (error) throw error;
 }
 
+async function updateJobFields(id, fields) {
+  const { error } = await supabaseClient.from("jobs").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
 async function deleteJobCloud(id) {
   const { error } = await supabaseClient.from("jobs").delete().eq("id", id);
   if (error) throw error;
@@ -265,12 +271,12 @@ async function deleteJobCloud(id) {
 
 async function deleteJobById(id) {
   const jobToDelete = state.jobs.find((job) => job.id === id);
-  if (jobToDelete) {
-    await upsertClientFromJob(jobToDelete);
-  }
+  if (!jobToDelete) return;
+  await upsertClientFromJob(jobToDelete);
 
-  await deleteJobCloud(id);
-  state.jobs = state.jobs.filter((job) => job.id !== id);
+  const archivedTask = isDeletedJob(jobToDelete) ? jobToDelete.task : `${DELETED_PREFIX}${jobToDelete.task}`;
+  await updateJobFields(id, { task: archivedTask });
+  state.jobs = state.jobs.map((job) => (job.id === id ? { ...job, task: archivedTask } : job));
 }
 
 async function rotateStatusById(id) {
@@ -336,6 +342,7 @@ function filteredJobs() {
   const status = statusFilter.value;
 
   return state.jobs.filter((job) => {
+    if (isDeletedJob(job)) return false;
     if (status && job.status !== status) return false;
     if (!text) return true;
     return (
@@ -376,7 +383,7 @@ function renderTable(jobs) {
 function renderInProcessTable() {
   inProcessBody.innerHTML = "";
   const inProcessJobs = state.jobs
-    .filter((job) => job.status === "En progreso")
+    .filter((job) => job.status === "En progreso" && !isDeletedJob(job))
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 
   if (inProcessJobs.length === 0) {
@@ -400,7 +407,7 @@ function renderInProcessTable() {
 }
 
 function renderStats() {
-  const weekJobs = jobsInCurrentWeek(state.jobs);
+  const weekJobs = jobsInCurrentWeek(state.jobs, false);
   const byStatus = Object.fromEntries(statusOrder.map((s) => [s, 0]));
   let weeklyRevenue = 0;
 
@@ -433,7 +440,7 @@ function renderStats() {
 function renderCalendar() {
   calendarGrid.innerHTML = "";
   const weekDays = getCurrentWeekDays();
-  const jobsByDay = groupWeekJobsByDate(state.jobs);
+  const jobsByDay = groupWeekJobsByDate(state.jobs, false);
 
   for (const day of weekDays) {
     const jobs = jobsByDay.get(day.key) || [];
@@ -460,7 +467,7 @@ function renderEarnings() {
     return;
   }
 
-  const weekJobs = jobsInCurrentWeek(state.jobs)
+  const weekJobs = jobsInCurrentWeek(state.jobs, true)
     .filter((job) => job.status === "Finalizado" || job.status === "Entregado")
     .sort((a, b) => {
       const diff = Number(a.estimatedCost || 0) - Number(b.estimatedCost || 0);
@@ -684,7 +691,7 @@ function setTodayAsDefault() {
   dateField.value = new Date().toISOString().slice(0, 10);
 }
 
-function jobsInCurrentWeek(jobs) {
+function jobsInCurrentWeek(jobs, includeDeleted) {
   const now = new Date();
   const day = now.getDay();
   const diffToMonday = day === 0 ? 6 : day - 1;
@@ -695,6 +702,7 @@ function jobsInCurrentWeek(jobs) {
   end.setDate(start.getDate() + 7);
 
   return jobs.filter((job) => {
+    if (!includeDeleted && isDeletedJob(job)) return false;
     const d = new Date(job.date + "T00:00:00");
     return d >= start && d < end;
   });
@@ -719,12 +727,12 @@ function buildWeeklySnapshot(jobs) {
   };
 }
 
-function groupWeekJobsByDate(jobs) {
+function groupWeekJobsByDate(jobs, includeDeleted) {
   const map = new Map();
   for (const day of getCurrentWeekDays()) {
     map.set(day.key, []);
   }
-  for (const job of jobsInCurrentWeek(jobs)) {
+  for (const job of jobsInCurrentWeek(jobs, includeDeleted)) {
     if (map.has(job.date)) {
       map.get(job.date).push(job);
     }
@@ -848,6 +856,10 @@ function makeId() {
 
 function statusClass(status) {
   return status.replace(/\s+/g, "-");
+}
+
+function isDeletedJob(job) {
+  return String(job.task || "").startsWith(DELETED_PREFIX);
 }
 
 function formatDate(value) {
