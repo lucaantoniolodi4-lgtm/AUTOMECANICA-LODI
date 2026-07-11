@@ -368,7 +368,7 @@ function renderTable(jobs) {
       <td>${escapeHtml(job.clientPhone)}</td>
       <td>${escapeHtml(job.vehicleModel)}</td>
       <td>${escapeHtml(job.vehiclePlate)}</td>
-      <td>${escapeHtml(job.task)}</td>
+      <td>${escapeHtml(taskForDisplay(job.task))}</td>
       <td><span class="badge ${statusClass(job.status)}">${job.status}</span></td>
       <td>${formatCurrency(job.estimatedCost)}</td>
       <td>
@@ -398,7 +398,7 @@ function renderInProcessTable() {
       <td>${escapeHtml(job.clientName)}</td>
       <td>${escapeHtml(job.vehicleModel)}</td>
       <td>${escapeHtml(job.vehiclePlate)}</td>
-      <td>${escapeHtml(job.task)}</td>
+      <td>${escapeHtml(taskForDisplay(job.task))}</td>
       <td><span class="badge En-progreso">En progreso</span></td>
       <td><button class="action-btn" data-action="finalize" data-id="${job.id}">Finalizado</button></td>
     `;
@@ -491,7 +491,7 @@ function renderEarnings() {
     : "Ordenado por dinero ganado: mayor a menor";
 
   const items = weekJobs.map((job) => ({
-    label: `${job.clientName} - ${job.task}`,
+    label: `${job.clientName} - ${taskForDisplay(job.task)}`,
     value: Number(job.estimatedCost || 0)
   }));
   earningsChart.innerHTML = buildPointsChartMarkup(items, caption);
@@ -657,7 +657,7 @@ function renderWeeklyRecords() {
                 <td>${escapeHtml(job.clientDni || "-")}</td>
                 <td>${escapeHtml(job.vehicleModel || "-")}</td>
                 <td>${escapeHtml(job.vehiclePlate || "-")}</td>
-                <td>${escapeHtml(job.task || "-")}</td>
+                <td>${escapeHtml(taskForDisplay(job.task || "-"))}</td>
                 <td>${escapeHtml(job.status || "-")}</td>
                 <td>${formatCurrency(job.estimatedCost)}</td>
               </tr>
@@ -675,7 +675,7 @@ function renderClientJobs(jobs) {
 
   return `
     <div class="client-jobs">
-      ${jobs.map((job) => `<div class="client-job-item"><span>${formatDate(job.date)}</span><strong>${escapeHtml(job.task)}</strong></div>`).join("")}
+      ${jobs.map((job) => `<div class="client-job-item"><span>${formatDate(job.date)}</span><strong>${escapeHtml(taskForDisplay(job.task))}</strong></div>`).join("")}
     </div>
   `;
 }
@@ -860,6 +860,10 @@ function statusClass(status) {
 
 function isDeletedJob(job) {
   return String(job.task || "").startsWith(DELETED_PREFIX);
+}
+
+function taskForDisplay(task) {
+  return String(task || "").replace(DELETED_PREFIX, "");
 }
 
 function formatDate(value) {
