@@ -1,12 +1,14 @@
 :root {
-  --bg: #a50000;
-  --panel: #ffffff;
-  --panel-2: #f4f4f4;
-  --text: #111111;
-  --muted: #555555;
-  --primary: #111111;
-  --border: #d9d9d9;
-  --soft: #efefef;
+  --bg: #0a0a0a;
+  --panel: #121212;
+  --panel-2: #1a1a1a;
+  --text: #f5f5f5;
+  --muted: #b3b3b3;
+  --primary: #d10000;
+  --border: #2b2b2b;
+  --soft: #181818;
+  --accent: #ff2b2b;
+  --accent-dark: #8a0000;
 }
 
 * {
@@ -16,7 +18,10 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Arial, sans-serif;
-  background: linear-gradient(180deg, #8f0000 0%, var(--bg) 100%);
+  background:
+    radial-gradient(circle at 10% 10%, #5a0000 0%, transparent 30%),
+    radial-gradient(circle at 90% 20%, #2b0000 0%, transparent 28%),
+    linear-gradient(180deg, #090909 0%, #0f0f0f 100%);
   color: var(--text);
 }
 
@@ -35,10 +40,11 @@ body {
   width: min(420px, 100%);
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--panel);
   padding: 18px;
   display: grid;
   gap: 10px;
+  box-shadow: 0 12px 35px #00000080;
 }
 
 .login-card h2 {
@@ -62,8 +68,8 @@ body {
 
 .topbar {
   padding: 28px 24px;
-  border-bottom: 1px solid #6f0000;
-  background: #7a0000;
+  border-bottom: 1px solid #3a0b0b;
+  background: linear-gradient(180deg, #1a0000 0%, #0c0c0c 100%);
   text-align: center;
   position: relative;
 }
@@ -73,11 +79,12 @@ body {
   letter-spacing: 2px;
   font-size: 1.8rem;
   color: #ffffff;
+  text-shadow: 0 0 12px #a10000cc;
 }
 
 .topbar p {
   margin: 8px 0 0;
-  color: #ffe0e0;
+  color: #ff9f9f;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -86,8 +93,8 @@ body {
   position: absolute;
   right: 16px;
   top: 16px;
-  border: 1px solid #ffffff55;
-  background: #00000033;
+  border: 1px solid #ff4a4a66;
+  background: #1a000099;
   color: #ffffff;
   cursor: pointer;
 }
@@ -111,7 +118,7 @@ body {
 .tab-btn {
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: #171717;
   color: var(--text);
   cursor: pointer;
   padding: 10px 16px;
@@ -119,9 +126,10 @@ body {
 }
 
 .tab-btn.active {
-  background: #111111;
+  background: linear-gradient(180deg, #d10000 0%, #8f0000 100%);
   color: #ffffff;
-  border-color: #111111;
+  border-color: #c30000;
+  box-shadow: 0 0 0 2px #ffffff10 inset;
 }
 
 .tab-panel {
@@ -147,6 +155,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
+  box-shadow: 0 8px 25px #0000003d;
 }
 
 .card h2 {
@@ -185,11 +194,12 @@ select:focus {
 }
 
 button.primary {
-  background: var(--primary);
+  background: linear-gradient(180deg, #d10000 0%, #9e0000 100%);
   color: #ffffff;
   border: none;
   cursor: pointer;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .table-header {
@@ -224,7 +234,7 @@ td {
 }
 
 th {
-  color: var(--muted);
+  color: #ffb1b1;
   font-weight: 600;
 }
 
@@ -237,27 +247,31 @@ th {
 }
 
 .Pendiente {
-  background: #f0f0f0;
-  color: #444444;
+  background: #2a2a2a;
+  color: #ffdf9e;
+  border-color: #5a4a20;
 }
 
 .En-progreso {
-  background: #e8e8e8;
-  color: #2d2d2d;
+  background: #1d1d1d;
+  color: #ffb1b1;
+  border-color: #5e2222;
 }
 
 .Finalizado {
-  background: #dcdcdc;
-  color: #1e1e1e;
+  background: #152315;
+  color: #9dff9d;
+  border-color: #2d5a2d;
 }
 
 .Entregado {
-  background: #cacaca;
-  color: #111111;
+  background: #222;
+  color: #e6e6e6;
+  border-color: #4f4f4f;
 }
 
 .icon-btn {
-  background: transparent;
+  background: #1a1a1a;
   border: 1px solid var(--border);
   color: var(--muted);
   cursor: pointer;
@@ -265,13 +279,13 @@ th {
 }
 
 .icon-btn:hover {
-  color: #111111;
-  border-color: #999999;
+  color: #fff;
+  border-color: #ff4a4a;
 }
 
 .action-btn {
-  border: 1px solid #111111;
-  background: #111111;
+  border: 1px solid #c30000;
+  background: linear-gradient(180deg, #d10000 0%, #8f0000 100%);
   color: #ffffff;
   cursor: pointer;
   padding: 6px 10px;
@@ -293,6 +307,7 @@ th {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
+  box-shadow: inset 0 0 0 1px #ffffff05;
 }
 
 .stat .label {
@@ -320,7 +335,7 @@ th {
 }
 
 .bar-track {
-  background: #f3f3f3;
+  background: #0f0f0f;
   border: 1px solid var(--border);
   border-radius: 999px;
   overflow: hidden;
@@ -328,7 +343,7 @@ th {
 
 .bar-fill {
   height: 14px;
-  background: #111111;
+  background: linear-gradient(90deg, #ff2b2b 0%, #8f0000 100%);
 }
 
 .calendar-grid {
@@ -340,7 +355,7 @@ th {
 .calendar-day {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fcfcfc;
+  background: #151515;
   padding: 10px;
   min-height: 180px;
 }
@@ -383,8 +398,8 @@ th {
 .microtab-btn {
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #ffffff;
-  color: #111111;
+  background: #171717;
+  color: #ffffff;
   cursor: pointer;
   padding: 8px 12px;
   font-weight: 600;
@@ -392,9 +407,9 @@ th {
 }
 
 .microtab-btn.active {
-  background: #111111;
+  background: linear-gradient(180deg, #d10000 0%, #8f0000 100%);
   color: #ffffff;
-  border-color: #111111;
+  border-color: #c30000;
 }
 
 .points-chart-wrap {
@@ -411,7 +426,7 @@ th {
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fafafa;
+  background: #111;
 }
 
 .points-svg {
@@ -422,19 +437,19 @@ th {
 }
 
 .axis-line {
-  stroke: #bbbbbb;
+  stroke: #444;
   stroke-width: 1;
 }
 
 .line-path {
   fill: none;
-  stroke: #111111;
+  stroke: #ff2b2b;
   stroke-width: 2;
 }
 
 .dot-point {
   fill: #c40000;
-  stroke: #111111;
+  stroke: #fff;
   stroke-width: 1.5;
 }
 
@@ -450,7 +465,7 @@ th {
   align-items: center;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fcfcfc;
+  background: #171717;
   padding: 8px 10px;
 }
 
@@ -478,7 +493,7 @@ th {
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fafafa;
+  background: #171717;
 }
 
 .client-job-item span {
