@@ -689,6 +689,7 @@ function renderWeeklyRecords() {
 
   for (const weekKey of orderedWeeks) {
     const weekJobs = grouped.get(weekKey).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const visibleWeekJobs = weekJobs.filter((job) => !isWeeklyResetJob(job));
     const total = weekJobs.reduce((acc, job) => acc + Number(job.estimatedCost || 0), 0);
     const [year, week] = weekKey.split("-W");
     const range = weekRangeFromKey(weekKey);
@@ -697,7 +698,7 @@ function renderWeeklyRecords() {
     details.className = "week-block";
     details.open = true;
     details.innerHTML = `
-      <summary>Semana ${week} (${year}) - ${formatDate(range.start)} al ${formatDate(range.end)} - ${weekJobs.length} ingreso(s) - ${formatCurrency(total)}</summary>
+      <summary>Semana ${week} (${year}) - ${formatDate(range.start)} al ${formatDate(range.end)} - ${visibleWeekJobs.length} ingreso(s) - ${formatCurrency(total)}</summary>
       <div class="table-wrap">
         <table>
           <thead>
@@ -714,7 +715,11 @@ function renderWeeklyRecords() {
             </tr>
           </thead>
           <tbody>
-            ${weekJobs.map((job) => `
+            ${visibleWeekJobs.length === 0 ? `
+              <tr>
+                <td colspan="9">Semana reseteada: sin trabajos visibles.</td>
+              </tr>
+            ` : visibleWeekJobs.map((job) => `
               <tr>
                 <td>${formatDate(job.date)}</td>
                 <td>${escapeHtml(job.clientName)}</td>
