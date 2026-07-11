@@ -68,7 +68,6 @@ async function initApp() {
   state.initialized = true;
 
   await loadCloudData();
-  await migrateClientsFromJobs();
 
   setTodayAsDefault();
   bindEvents();
@@ -318,12 +317,6 @@ async function upsertClientFromJob(job) {
   const idx = state.clients.findIndex((item) => item.id === client.id);
   if (idx === -1) state.clients.push(client);
   else state.clients[idx] = client;
-}
-
-async function migrateClientsFromJobs() {
-  for (const job of [...state.jobs].sort((a, b) => Number(a.createdAt) - Number(b.createdAt))) {
-    await upsertClientFromJob(job);
-  }
 }
 
 function render() {
